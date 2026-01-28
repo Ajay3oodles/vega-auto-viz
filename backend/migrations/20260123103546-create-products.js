@@ -24,8 +24,8 @@ export async function up(queryInterface, Sequelize) {
       defaultValue: 0
     },
     supplier: Sequelize.STRING(100),
-    createdAt: Sequelize.DATE,
-    updatedAt: Sequelize.DATE
+    created_at: Sequelize.DATE,
+    updated_at: Sequelize.DATE
   });
 }
 

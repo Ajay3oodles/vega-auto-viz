@@ -1,370 +1,499 @@
 // controllers/aiChartController.js
-// AI-powered chart generation from natural language prompts
+// Thin controller - delegates to services and utils
+// Follows separation of concerns principle
 
-import { sequelize } from '../models/index.js';
-import { QueryTypes } from 'sequelize';
+import { getCachedSchema, clearSchemaCache, getDatabaseStats } from '../utils/databaseSchema.js';
+import { generateChartWithAI, testOpenAIConnection, getModelInfo } from '../services/aiService.js';
+import { executeQuery, validateQuery, testConnection, getDatabaseMetadata } from '../services/databaseService.js';
+import { 
+  validateVegaSpec, 
+  enhanceVegaSpec, 
+  convertChartData, 
+  generateChartSummary,
+  suggestAlternativeCharts 
+} from '../services/chartService.js';
+import { validatePrompt, validateTableName } from '../utils/validation.js';
+import { formatNumber, formatRelativeTime } from '../utils/helpers.js';
 
 /**
  * Generate chart from natural language prompt
+ * 
  * @route POST /api/ai-chart
- * @body { prompt: string }
+ * @body { prompt: string, options?: Object }
  */
 export const generateChartFromPrompt = async (req, res) => {
+  const startTime = Date.now();
+
   try {
-    const { prompt } = req.body;
-    
-    if (!prompt) {
+    const { prompt, options = {} } = req.body;
+
+    // Validate input
+    const promptValidation = validatePrompt(prompt);
+    if (!promptValidation.valid) {
       return res.status(400).json({
         success: false,
-        message: 'Prompt is required'
+        message: 'Invalid prompt',
+        errors: promptValidation.errors
       });
     }
 
     console.log('📝 User prompt:', prompt);
 
-    // Step 1: Analyze prompt and determine intent
-    const analysis = analyzePrompt(prompt);
-    console.log('🔍 Analysis:', analysis);
+    // Get database schema
+    console.log('🔍 Fetching database schema...');
+    const schema = await getCachedSchema();
+    console.log(`📊 Database: ${schema.database} (${schema.dialect})`);
+    console.log(`📋 Tables: ${schema.tables.map(t => t.name).join(', ')}`);
 
-    // Step 2: Generate SQL query based on analysis
-    const sqlQuery = generateSQLQuery(analysis);
-    console.log('💾 SQL Query:', sqlQuery);
+    // Generate SQL and Vega spec using AI
+    console.log('🤖 Generating chart with AI...');
+    const aiResponse = await generateChartWithAI(prompt, schema);
+    console.log('✅ AI generation successful');
 
-    // Step 3: Execute query
-    const data = await sequelize.query(sqlQuery, {
-      type: QueryTypes.SELECT
+    // Validate generated SQL
+    const sqlValidation = validateQuery(aiResponse.sqlQuery, schema);
+    if (!sqlValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Generated SQL is invalid',
+        errors: sqlValidation.errors,
+        warnings: sqlValidation.warnings
+      });
+    }
+
+    // Execute query
+    console.log('💾 Executing SQL query...');
+    const data = await executeQuery(aiResponse.sqlQuery, {
+      timeout: options.timeout || 30000,
+      maxRows: options.maxRows || 10000
     });
-    console.log('📊 Data rows:', data.length);
 
-    // Step 4: Generate Vega-Lite specification
-    const vegaSpec = generateVegaLiteSpec(analysis, data);
+    // 🔥 Normalize numeric values
+    const normalizedData = data.map(row => {
+    const normalized = { ...row };
+     for (const key in normalized) {
+      const value = normalized[key];
+      if (typeof value === 'string' && value.trim() !== '' && !isNaN(value)) {
+      normalized[key] = Number(value);
+     }
+   }
+  return normalized;
+  });
 
+
+    const executionTime = Date.now() - startTime;
+    console.log(`✅ Query completed in ${executionTime}ms, ${data.length} rows`);
+
+if (data.length === 0) {
+  const emptySpec = {
+    $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+    mark: 'text',
+    data: { values: [] },
+    encoding: {},
+    title: 'No data available for this query'
+  };
+
+  return res.status(200).json({
+    success: true,
+    prompt,
+    analysis: aiResponse.analysis,
+    sql: aiResponse.sqlQuery,
+    dataCount: 0,
+    data: [],
+    executionTime,
+    message: 'Query executed successfully but returned no data.',
+    vegaSpec: emptySpec
+  });
+}
+
+
+    // Validate and enhance Vega spec
+    const vegaValidation = validateVegaSpec(aiResponse.vegaSpec);
+    if (!vegaValidation.valid) {
+      console.warn('⚠️  Vega spec validation failed:', vegaValidation.errors);
+    }
+
+    const enhancedVegaSpec = enhanceVegaSpec(
+      aiResponse.vegaSpec, 
+      normalizedData,
+      options.chartOptions || {}
+    );
+    
+    const analysis = normalizeAnalysis(aiResponse.analysis, normalizedData);
+
+    // Generate summary statistics
+    const summary = generateChartSummary(normalizedData,analysis);
+
+    // Suggest alternative chart types
+    const alternatives = suggestAlternativeCharts(normalizedData,analysis);
+
+    // Return response
     res.status(200).json({
       success: true,
       prompt,
-      analysis,
-      sql: sqlQuery,
+      analysis: aiResponse.analysis,
+      sql: aiResponse.sqlQuery,
       dataCount: data.length,
       data,
-      vegaSpec
+      vegaSpec: enhancedVegaSpec,
+      executionTime,
+      summary,
+      alternatives,
+      explanation: aiResponse.explanation,
+      tokensUsed: aiResponse.tokensUsed,
+      database: {
+        name: schema.database,
+        dialect: schema.dialect
+      }
     });
 
   } catch (error) {
     console.error('❌ Error generating chart:', error);
-    res.status(500).json({
+
+    // Determine error type and respond appropriately
+    const statusCode = error.name === 'DatabaseError' ? 500 : 500;
+    
+    res.status(statusCode).json({
       success: false,
       message: 'Failed to generate chart',
       error: error.message,
-      hint: 'Try rephrasing your prompt. Examples: "Show sales by category", "Average age by country", "Top products by revenue"'
+      executionTime: Date.now() - startTime,
+      hint: getErrorHint(error)
+    });
+  }
+};
+
+function normalizeAnalysis(analysis, data) {
+  const sample = data[0] || {};
+  const numericCols = Object.keys(sample).filter(
+    k => typeof sample[k] === 'number'
+  );
+
+  return {
+    ...analysis,
+    groupByField: analysis.groupBy,
+    valueField: numericCols[0] || null
+  };
+}
+
+
+/**
+ * Get example prompts based on database schema
+ * 
+ * @route GET /api/ai-chart/examples
+ */
+export const getPromptExamples = async (req, res) => {
+  try {
+    const schema = await getCachedSchema();
+    const tableNames = schema.tables.map(t => t.name);
+
+    const examples = {
+      basic: [
+        `Show all data from ${tableNames[0] || 'your_table'}`,
+        `Count records in ${tableNames[0] || 'your_table'}`,
+        'List all available tables'
+      ],
+      aggregation: [
+        'Show total and average by category',
+        'Find top 10 records by value',
+        'Group by category and sum values'
+      ],
+      timeAnalysis: [
+        'Show monthly trend',
+        'Compare this year vs last year',
+        'Daily breakdown for last 30 days'
+      ],
+      multiTable: tableNames.length > 1 ? [
+        `Join ${tableNames[0]} with ${tableNames[1]}`,
+        'Show relationships between tables',
+        'Compare data across tables'
+      ] : []
+    };
+
+    // Add table-specific examples
+    tableNames.forEach(tableName => {
+      examples[tableName] = [
+        `Show all ${tableName}`,
+        `Count ${tableName} by category`,
+        `Top 10 ${tableName} by value`
+      ];
+    });
+
+    res.status(200).json({
+      success: true,
+      database: schema.database,
+      dialect: schema.dialect,
+      availableTables: tableNames,
+      tableCount: tableNames.length,
+      examples,
+      tips: [
+        "Ask naturally - the AI understands your database",
+        "Reference tables and columns by name",
+        "Use time phrases: 'last month', 'this year'",
+        "Request comparisons: 'compare X vs Y'",
+        "Specify limits: 'top 5', 'bottom 10'",
+        "Choose chart types: 'as a line chart'",
+        "The AI handles joins automatically"
+      ]
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting examples:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate examples',
+      error: error.message
     });
   }
 };
 
 /**
- * Analyze natural language prompt to extract intent
+ * Get database schema information
+ * 
+ * @route GET /api/ai-chart/schema
+ * @query refresh - Force refresh cache
  */
-function analyzePrompt(prompt) {
-  const lower = prompt.toLowerCase();
-  
-  // Determine table
-  let table = 'sales';
-  if (lower.includes('user') || lower.includes('customer')) {
-    table = 'users';
-  } else if (lower.includes('product') || lower.includes('inventory')) {
-    table = 'products';
-  }
-  
-  // Determine aggregation function
-  let aggregation = 'sum';
-  if (lower.includes('average') || lower.includes('avg') || lower.includes('mean')) {
-    aggregation = 'avg';
-  } else if (lower.includes('count') || lower.includes('number of') || lower.includes('how many')) {
-    aggregation = 'count';
-  } else if (lower.includes('max') || lower.includes('highest') || lower.includes('top')) {
-    aggregation = 'max';
-  } else if (lower.includes('min') || lower.includes('lowest') || lower.includes('bottom')) {
-    aggregation = 'min';
-  }
-  
-  // Determine grouping field (x-axis)
-  let groupBy = null;
-  let groupByField = null;
-  
-  if (table === 'sales') {
-    if (lower.includes('category') || lower.includes('categories')) {
-      groupBy = 'category';
-      groupByField = 'category';
-    } else if (lower.includes('region')) {
-      groupBy = 'region';
-      groupByField = 'region';
-    } else if (lower.includes('product')) {
-      groupBy = 'product_name';
-      groupByField = 'product_name';
-    } else if (lower.includes('month') || lower.includes('time') || lower.includes('date')) {
-      groupBy = 'month';
-      groupByField = "TO_CHAR(sale_date, 'YYYY-MM')";
-    } else {
-      groupBy = 'category';
-      groupByField = 'category';
-    }
-  } else if (table === 'users') {
-    if (lower.includes('country') || lower.includes('countries')) {
-      groupBy = 'country';
-      groupByField = 'country';
-    } else if (lower.includes('city') || lower.includes('cities')) {
-      groupBy = 'city';
-      groupByField = 'city';
-    } else if (lower.includes('tier') || lower.includes('subscription')) {
-      groupBy = 'subscription_tier';
-      groupByField = 'subscription_tier';
-    } else {
-      groupBy = 'country';
-      groupByField = 'country';
-    }
-  } else if (table === 'products') {
-    if (lower.includes('category') || lower.includes('categories')) {
-      groupBy = 'category';
-      groupByField = 'category';
-    } else if (lower.includes('supplier')) {
-      groupBy = 'supplier';
-      groupByField = 'supplier';
-    } else {
-      groupBy = 'category';
-      groupByField = 'category';
-    }
-  }
-  
-  // Determine value field (y-axis)
-  let valueField = null;
-  let valueColumn = null;
-  
-  if (table === 'sales') {
-    if (lower.includes('revenue') || lower.includes('total') || lower.includes('sales') || lower.includes('amount')) {
-      valueField = 'total_amount';
-      valueColumn = 'amount * quantity';
-    } else if (lower.includes('quantity') || lower.includes('units')) {
-      valueField = 'quantity';
-      valueColumn = 'quantity';
-    } else {
-      valueField = 'total_amount';
-      valueColumn = 'amount * quantity';
-    }
-  } else if (table === 'users') {
-    if (lower.includes('age')) {
-      valueField = 'age';
-      valueColumn = 'age';
-    } else {
-      valueField = 'user_count';
-      valueColumn = 'id';
-    }
-  } else if (table === 'products') {
-    if (lower.includes('price')) {
-      valueField = 'price';
-      valueColumn = 'price';
-    } else if (lower.includes('stock') || lower.includes('inventory')) {
-      valueField = 'stock_quantity';
-      valueColumn = 'stock_quantity';
-    } else {
-      valueField = 'product_count';
-      valueColumn = 'id';
-    }
-  }
-  
-  // Determine chart type
-  let chartType = 'bar';
-  if (lower.includes('line') || lower.includes('trend') || lower.includes('over time')) {
-    chartType = 'line';
-  } else if (lower.includes('pie')) {
-    chartType = 'arc';
-  } else if (lower.includes('scatter') || lower.includes('point')) {
-    chartType = 'point';
-  } else if (lower.includes('area')) {
-    chartType = 'area';
-  }
-  
-  // Determine limit
-  let limit = null;
-  const topMatch = lower.match(/top (\d+)/);
-  if (topMatch) {
-    limit = parseInt(topMatch[1]);
-  }
-  
-  // Determine sort order
-  let sortOrder = 'DESC';
-  if (lower.includes('lowest') || lower.includes('bottom') || lower.includes('least')) {
-    sortOrder = 'ASC';
-  }
-  
-  return {
-    table,
-    groupBy,
-    groupByField,
-    valueField,
-    valueColumn,
-    aggregation,
-    chartType,
-    limit,
-    sortOrder
-  };
-}
+export const getDatabaseSchemaInfo = async (req, res) => {
+  try {
+    const forceRefresh = req.query.refresh === 'true';
+    const schema = await getCachedSchema(forceRefresh);
 
-/**
- * Generate SQL query from analysis
- */
-function generateSQLQuery(analysis) {
-  const {
-    table,
-    groupBy,
-    groupByField,
-    valueField,
-    valueColumn,
-    aggregation,
-    limit,
-    sortOrder
-  } = analysis;
-  
-  let aggFunc = aggregation.toUpperCase();
-  let selectClause = '';
-  
-  if (aggregation === 'count') {
-    selectClause = `${groupByField} as ${groupBy}, COUNT(*) as ${valueField}`;
-  } else {
-    selectClause = `${groupByField} as ${groupBy}, ${aggFunc}(${valueColumn}) as ${valueField}`;
-  }
-  
-  let query = `
-    SELECT ${selectClause}
-    FROM ${table}
-    WHERE ${groupBy} IS NOT NULL
-    GROUP BY ${groupByField}
-    ORDER BY ${valueField} ${sortOrder}
-  `;
-  
-  if (limit) {
-    query += `\n    LIMIT ${limit}`;
-  }
-  
-  return query.trim();
-}
+    res.status(200).json({
+      success: true,
+      schema,
+      cached: !forceRefresh,
+      message: 'Database schema retrieved successfully'
+    });
 
-/**
- * Generate Vega-Lite specification from analysis and data
- */
-function generateVegaLiteSpec(analysis, data) {
-  const { chartType, groupBy, valueField, aggregation } = analysis;
-  
-  // Determine field types
-  const xType = groupBy === 'month' ? 'temporal' : 'nominal';
-  const yType = 'quantitative';
-  
-  // Base specification
-  const spec = {
-    $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
-    description: 'Auto-generated chart from natural language',
-    width: 700,
-    height: 400,
-    data: { values: data },
-    mark: {
-      type: chartType,
-      tooltip: true
-    }
-  };
-  
-  // Configure encoding based on chart type
-  if (chartType === 'arc') {
-    // Pie chart
-    spec.mark = { type: 'arc', tooltip: true };
-    spec.encoding = {
-      theta: {
-        field: valueField,
-        type: 'quantitative'
-      },
-      color: {
-        field: groupBy,
-        type: 'nominal',
-        legend: { title: groupBy.replace('_', ' ').toUpperCase() }
-      }
-    };
-  } else {
-    // Bar, line, point, area charts
-    spec.encoding = {
-      x: {
-        field: groupBy,
-        type: xType,
-        axis: {
-          labelAngle: -45,
-          title: groupBy.replace('_', ' ').toUpperCase()
-        }
-      },
-      y: {
-        field: valueField,
-        type: yType,
-        axis: {
-          title: `${aggregation.toUpperCase()} of ${valueField.replace('_', ' ')}`
-        }
-      },
-      color: {
-        field: groupBy,
-        type: 'nominal',
-        legend: null
-      }
-    };
-    
-    // Add tooltip
-    spec.encoding.tooltip = [
-      { field: groupBy, type: xType },
-      { field: valueField, type: yType, format: ',.2f' }
-    ];
+  } catch (error) {
+    console.error('❌ Error fetching schema:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch database schema',
+      error: error.message
+    });
   }
-  
-  return spec;
-}
-
-/**
- * Get available prompt examples
- * @route GET /api/ai-chart/examples
- */
-export const getPromptExamples = async (req, res) => {
-  const examples = {
-    sales: [
-      "Show total sales by category",
-      "What are the top 5 products by revenue?",
-      "Average sales amount by region",
-      "Show sales trend over time",
-      "Count of sales by category"
-    ],
-    users: [
-      "Show user distribution by country",
-      "Average age by country",
-      "How many users per subscription tier?",
-      "Show users by city",
-      "Count users by country"
-    ],
-    products: [
-      "Show products by category",
-      "Average price by category",
-      "Total inventory by category",
-      "Top 10 most expensive products",
-      "Products by supplier"
-    ],
-    advanced: [
-      "Show top 3 categories by total revenue",
-      "Average product price by supplier",
-      "User count by subscription tier",
-      "Monthly sales trend",
-      "Bottom 5 products by stock quantity"
-    ]
-  };
-  
-  res.status(200).json({
-    success: true,
-    examples,
-    tips: [
-      "Be specific about what you want to see",
-      "Mention aggregation: sum, average, count, max, min",
-      "Specify grouping: by category, by region, by country, etc.",
-      "Use 'top N' or 'bottom N' for limits",
-      "Mention chart type: bar, line, pie, scatter, area"
-    ]
-  });
 };
+
+/**
+ * Refresh schema cache
+ * 
+ * @route POST /api/ai-chart/schema/refresh
+ */
+export const refreshSchemaCache = async (req, res) => {
+  try {
+    clearSchemaCache();
+    const schema = await getCachedSchema(true);
+
+    res.status(200).json({
+      success: true,
+      message: 'Schema cache refreshed successfully',
+      tableCount: schema.tables.length,
+      tables: schema.tables.map(t => ({
+        name: t.name,
+        columnCount: t.columns.length
+      }))
+    });
+
+  } catch (error) {
+    console.error('❌ Error refreshing schema:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to refresh schema cache',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get database statistics
+ * 
+ * @route GET /api/ai-chart/stats
+ */
+export const getDatabaseStatistics = async (req, res) => {
+  try {
+    const stats = await getDatabaseStats();
+    const metadata = await getDatabaseMetadata();
+
+    res.status(200).json({
+      success: true,
+      statistics: stats,
+      metadata
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get database statistics',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Test AI connection
+ * 
+ * @route GET /api/ai-chart/test-ai
+ */
+export const testAIConnection = async (req, res) => {
+  try {
+    const result = await testOpenAIConnection();
+    const modelInfo = getModelInfo();
+
+    res.status(200).json({
+      success: true,
+      ...result,
+      modelInfo
+    });
+
+  } catch (error) {
+    console.error('❌ AI test failed:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      hint: error.message.includes('authentication') 
+        ? 'Check your OPENAI_API_KEY in .env file'
+        : 'Check your internet connection and OpenAI service status'
+    });
+  }
+};
+
+/**
+ * Test database connection
+ * 
+ * @route GET /api/ai-chart/test-db
+ */
+export const testDatabaseConnection = async (req, res) => {
+  try {
+    const result = await testConnection();
+
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('❌ Database test failed:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      hint: 'Check your database configuration in .env file'
+    });
+  }
+};
+
+/**
+ * Export chart data in different formats
+ * 
+ * @route POST /api/ai-chart/export
+ * @body { data: Array, format: string }
+ */
+export const exportChartData = async (req, res) => {
+  try {
+    const { data, format = 'json' } = req.body;
+
+    if (!data || !Array.isArray(data)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Data must be an array'
+      });
+    }
+
+    const converted = convertChartData(data, format);
+
+    // Set appropriate content type
+    const contentTypes = {
+      json: 'application/json',
+      csv: 'text/csv',
+      tsv: 'text/tab-separated-values'
+    };
+
+    res.setHeader('Content-Type', contentTypes[format] || 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename=chart-data.${format}`);
+    res.send(converted);
+
+  } catch (error) {
+    console.error('❌ Export error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export data',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get health status of the service
+ * 
+ * @route GET /api/ai-chart/health
+ */
+export const getHealthStatus = async (req, res) => {
+  try {
+    const [dbTest, aiTest, schema] = await Promise.allSettled([
+      testConnection(),
+      testOpenAIConnection(),
+      getCachedSchema()
+    ]);
+
+    const health = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      components: {
+        database: {
+          status: dbTest.status === 'fulfilled' ? 'up' : 'down',
+          details: dbTest.status === 'fulfilled' ? dbTest.value : dbTest.reason?.message
+        },
+        ai: {
+          status: aiTest.status === 'fulfilled' ? 'up' : 'down',
+          details: aiTest.status === 'fulfilled' ? aiTest.value : aiTest.reason?.message
+        },
+        schema: {
+          status: schema.status === 'fulfilled' ? 'up' : 'down',
+          tableCount: schema.status === 'fulfilled' ? schema.value.tables.length : 0
+        }
+      }
+    };
+
+    // Overall status
+    const allUp = Object.values(health.components).every(c => c.status === 'up');
+    health.status = allUp ? 'healthy' : 'degraded';
+
+    const statusCode = allUp ? 200 : 503;
+    res.status(statusCode).json(health);
+
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Helper function to get appropriate error hint
+ * 
+ * @param {Error} error - Error object
+ * @returns {string} Error hint
+ */
+function getErrorHint(error) {
+  const message = error.message.toLowerCase();
+
+  if (message.includes('authentication') || message.includes('api key')) {
+    return 'Check your OpenAI API key in .env file';
+  }
+
+  if (message.includes('database') || message.includes('sql')) {
+    return 'Check your database connection and query syntax';
+  }
+
+  if (message.includes('timeout')) {
+    return 'Query took too long. Try adding filters to reduce data size';
+  }
+
+  if (message.includes('table') || message.includes('column')) {
+    return 'Referenced table or column may not exist. Check your database schema';
+  }
+
+  return 'Try rephrasing your prompt or check the server logs for details';
+}

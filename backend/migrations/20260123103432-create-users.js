@@ -31,8 +31,8 @@ export async function up(queryInterface, Sequelize) {
     subscription_tier: {
       type: Sequelize.STRING(50)
     },
-    createdAt: Sequelize.DATE,
-    updatedAt: Sequelize.DATE
+    created_at: Sequelize.DATE,
+    updated_at: Sequelize.DATE
   });
 }
 

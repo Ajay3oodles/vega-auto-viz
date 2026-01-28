@@ -2,6 +2,7 @@
 // Thin controller - delegates to services and utils
 // Follows separation of concerns principle
 
+import { saveWidget, getLastWidget } from '../services/widgetService.js';
 import { getCachedSchema, clearSchemaCache, getDatabaseStats } from '../utils/databaseSchema.js';
 import { generateChartWithAI, testOpenAIConnection, getModelInfo } from '../services/aiService.js';
 import { executeQuery, validateQuery, testConnection, getDatabaseMetadata } from '../services/databaseService.js';
@@ -126,6 +127,15 @@ if (data.length === 0) {
 
     // Suggest alternative chart types
     const alternatives = suggestAlternativeCharts(normalizedData,analysis);
+
+
+     // Save widget (don't wait for it)
+    saveWidget({
+      prompt,
+      sqlQuery: aiResponse.sqlQuery,
+      vegaSpec: enhancedVegaSpec,
+      analysis: aiResponse.analysis
+    }).catch(err => console.error('Widget save failed:', err));
 
     // Return response
     res.status(200).json({
@@ -497,3 +507,31 @@ function getErrorHint(error) {
 
   return 'Try rephrasing your prompt or check the server logs for details';
 }
+
+// Add new endpoint:
+/**
+ * Get last saved widget
+ * @route GET /api/widgets/last
+ */
+export const getLastSavedWidget = async (req, res) => {
+  try {
+    const widget = await getLastWidget();
+    
+    if (!widget) {
+      return res.status(404).json({ success: false, message: 'No widgets found' });
+    }
+
+    res.json({
+      success: true,
+      widget: {
+        id: widget.id,
+        prompt: widget.prompt,
+        sqlQuery: widget.sqlQuery,
+        vegaSpec: widget.vegaSpec,
+        analysis: widget.analysis
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

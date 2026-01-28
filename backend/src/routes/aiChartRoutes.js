@@ -4,7 +4,8 @@
 import express from 'express';
 import {
   generateChartFromPrompt,
-  getPromptExamples
+  getPromptExamples,
+  getLastSavedWidget
 } from '../controllers/aiChartController.js';
 
 const router = express.Router();
@@ -14,5 +15,8 @@ router.post('/', generateChartFromPrompt);       // POST /api/ai-chart
 
 // Get prompt examples
 router.get('/examples', getPromptExamples);      // GET /api/ai-chart/examples
+
+// Add this route:
+router.get('/widgets/last', getLastSavedWidget);
 
 export default router;

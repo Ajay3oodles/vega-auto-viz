@@ -76,10 +76,10 @@ export function validateQuery(sqlQuery, schema) {
   });
 
   // Check for SELECT statement
-  if (!/^\s*SELECT/i.test(sqlQuery)) {
+    if (!/^\s*(SELECT|WITH)\b/i.test(sqlQuery)) {
     validation.valid = false;
     validation.errors.push('Only SELECT queries are allowed');
-  }
+   }
 
   // Extract table names from SQL
   const tablePattern = /FROM\s+(\w+)|JOIN\s+(\w+)/gi;

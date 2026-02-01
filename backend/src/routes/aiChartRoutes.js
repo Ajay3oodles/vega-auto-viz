@@ -10,13 +10,9 @@ import {
 
 const router = express.Router();
 
-// Generate chart from natural language prompt
-router.post('/', generateChartFromPrompt);       // POST /api/ai-chart
+router.post('/', generateChartFromPrompt);          // POST /api/ai-chart
+router.get('/examples', getPromptExamples);         // GET  /api/ai-chart/examples
+router.get('/widgets/last', getLastSavedWidget);    // GET  /api/ai-chart/widgets/last
 
-// Get prompt examples
-router.get('/examples', getPromptExamples);      // GET /api/ai-chart/examples
-
-// Add this route:
-router.get('/widgets/last', getLastSavedWidget);
 
 export default router;

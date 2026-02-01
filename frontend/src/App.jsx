@@ -1,20 +1,5 @@
-/**
- * App Component
- * 
- * Main application component that orchestrates all other components.
- * This is the "container" or "smart" component that manages state and logic.
- * 
- * Component Structure:
- * - Header: Application title and branding
- * - PromptInput: Text input for user queries
- * - LoadingState: Shown while processing
- * - ErrorDisplay: Shown if error occurs
- * - ChartDisplay: Shows generated chart
- * - ExamplePrompts: Quick-start examples
- * - Toast: Notification messages
- */
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Header from './components/Header';
 import PromptInput from './components/PromptInput';
 import ChartDisplay from './components/ChartDisplay';
@@ -22,193 +7,181 @@ import ExamplePrompts from './components/ExamplePrompts';
 import LoadingState from './components/LoadingState';
 import ErrorDisplay from './components/ErrorDisplay';
 import Toast from './components/Toast';
-import useChartGenerator from './hooks/useChartGenerator';
 
 function App() {
-  // Use custom hook to manage chart generation logic
-  const {
-    isLoading,
-    chartData,
-    error,
-    successMessage,
-    generateChart,
-    retry,
-    clearSuccessMessage,
-    clearError,
-  } = useChartGenerator();
+  const [isLoading, setIsLoading] = useState(false);
+  const [chartData, setChartData] = useState(null);
+  const [error, setError] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [isLoadingLastWidget, setIsLoadingLastWidget] = useState(true);
+
+  // Load last widget on mount
+  useEffect(() => {
+    loadLastWidget();
+  }, []);
 
   /**
-   * Handle prompt submission from input
+   * Load the last saved widget from the backend
    */
-  const handleSubmit = (prompt) => {
-    console.log('📝 User submitted prompt:', prompt);
-    generateChart(prompt);
+  const loadLastWidget = async () => {
+    try {
+      setIsLoadingLastWidget(true);
+      const response = await axios.get('/api/ai-chart/widgets/last');;
+      
+      if (response.data.success && response.data.widget) {
+        const widget = response.data.widget;
+        
+        // Format widget data to match chartData structure
+        setChartData({
+          prompt: widget.prompt,
+          vegaSpec: widget.vegaSpec,
+          data: widget.vegaSpec.data.values, // Extract data from vegaSpec
+          analysis: widget.analysis,
+          dataCount: widget.vegaSpec.data.values.length,
+          sql: widget.sqlQuery || '' // SQL might be null for security
+        });
+      }
+    } catch (err) {
+      // No widget found or error - that's okay, just show empty state
+      console.log('No previous widget found');
+    } finally {
+      setIsLoadingLastWidget(false);
+    }
+  };
+
+  /**
+   * Handle prompt submission
+   */
+  const handleSubmit = async (prompt) => {
+    setIsLoading(true);
+    setError(null);
+    setChartData(null);
+
+    try {
+      const response = await axios.post('/api/ai-chart', { prompt });
+;
+
+      if (response.data.success) {
+        setChartData(response.data);
+        showToast('Chart generated successfully!', 'success');
+      } else {
+        setError(response.data.message || 'Failed to generate chart');
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || 'An error occurred';
+      setError(errorMessage);
+      showToast('Failed to generate chart', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   /**
    * Handle example prompt selection
    */
-  const handleExampleSelect = (prompt) => {
-    console.log('💡 User selected example:', prompt);
-    generateChart(prompt);
+  const handleExampleClick = (prompt) => {
+    handleSubmit(prompt);
+  };
+
+  /**
+   * Show toast notification
+   */
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
+
+  /**
+   * Close toast
+   */
+  const closeToast = () => {
+    setToast(null);
   };
 
   /**
    * Handle retry after error
    */
   const handleRetry = () => {
-    console.log('🔄 Retrying...');
-    if (chartData?.prompt) {
-      generateChart(chartData.prompt);
-    }
-  };
-
-  /**
-   * Get error suggestions based on error message
-   */
-  const getErrorSuggestions = () => {
-    if (!error) return [];
-    
-    // Provide helpful suggestions based on error type
-    if (error.includes('connection') || error.includes('network')) {
-      return [
-        'Check your internet connection',
-        'Make sure the backend server is running on port 5000',
-        'Try refreshing the page',
-      ];
-    }
-    
-    return [
-      'Try rephrasing your query more specifically',
-      'Use simpler terms like "Show sales by category"',
-      'Check the example prompts below for inspiration',
-      'Make sure you specify what data you want to see',
-    ];
+    setError(null);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
-      {/* Header */}
+    <div className="min-h-screen bg-gray-50">
       <Header />
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
           {/* Prompt Input Section */}
           <section>
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-2">
-                Ask Your Question
-              </h2>
-              <p className="text-sm text-gray-600">
-                Type a natural language query to generate dynamic visualizations from your data
-              </p>
-            </div>
-            
-            <PromptInput 
-              onSubmit={handleSubmit} 
-              isLoading={isLoading} 
-            />
+            <PromptInput onSubmit={handleSubmit} isLoading={isLoading} />
           </section>
 
-          {/* Results Section */}
-          <section>
-            {/* Show loading state while processing */}
-            {isLoading && <LoadingState />}
-            
-            {/* Show error if something went wrong */}
-            {error && !isLoading && (
-              <ErrorDisplay 
-                error={error}
-                onRetry={handleRetry}
-                suggestions={getErrorSuggestions()}
-              />
-            )}
-            
-            {/* Show chart if successfully generated */}
-            {chartData && !isLoading && !error && (
-              <ChartDisplay 
-                chartData={chartData}
-                onCopy={clearSuccessMessage}  // Not ideal, but works for demo
-                onDownload={clearSuccessMessage}
-              />
-            )}
-          </section>
-
-          {/* Example Prompts Section - Always visible for guidance */}
-          <section>
-            <ExamplePrompts 
-              onSelectPrompt={handleExampleSelect}
-              isLoading={isLoading}
-            />
-          </section>
-
-          {/* Help Section */}
-          <section className="card bg-gradient-to-r from-primary-50 to-purple-50 border-2 border-primary-200">
-            <div className="text-center py-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Need Help?
-              </h3>
-              <p className="text-gray-700 mb-4">
-                The AI Dashboard uses natural language processing to understand your queries and generate visualizations.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-                <div className="bg-white p-4 rounded-lg">
-                  <h4 className="font-semibold text-primary-600 mb-2">📊 Supported Data</h4>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• Sales transactions</li>
-                    <li>• User demographics</li>
-                    <li>• Product inventory</li>
-                  </ul>
-                </div>
-                <div className="bg-white p-4 rounded-lg">
-                  <h4 className="font-semibold text-primary-600 mb-2">🎨 Chart Types</h4>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• Bar charts</li>
-                    <li>• Line charts</li>
-                    <li>• Pie charts</li>
-                    <li>• Scatter plots</li>
-                  </ul>
-                </div>
-                <div className="bg-white p-4 rounded-lg">
-                  <h4 className="font-semibold text-primary-600 mb-2">🔍 Aggregations</h4>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• Sum, Average</li>
-                    <li>• Count, Min, Max</li>
-                    <li>• Group by category</li>
-                  </ul>
+          {/* Loading State for Initial Widget Load */}
+          {isLoadingLastWidget && (
+            <section>
+              <div className="card">
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading previous chart...</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
+
+          {/* Chart Display / Loading / Error Section */}
+          {!isLoadingLastWidget && (
+            <section>
+              {isLoading && <LoadingState />}
+              
+              {!isLoading && error && (
+                <ErrorDisplay
+                  error={error}
+                  onRetry={handleRetry}
+                  suggestions={[
+                    'Try rephrasing your query',
+                    'Check if the table or column names are correct',
+                    'Use simpler queries',
+                  ]}
+                />
+              )}
+
+              {!isLoading && !error && chartData && (
+                <ChartDisplay
+                  chartData={chartData}
+                  onCopy={(msg) => showToast(msg, 'success')}
+                  onDownload={(msg) => showToast(msg, 'success')}
+                />
+              )}
+
+              {!isLoading && !error && !chartData && (
+                <div className="card text-center py-12">
+                  <p className="text-gray-600">
+                    No chart yet. Enter a query above or select an example below to get started!
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Example Prompts Section */}
+          {!isLoadingLastWidget && (
+            <section>
+              <ExamplePrompts
+                onSelectPrompt={handleExampleClick}
+                isLoading={isLoading}
+              />
+            </section>
+          )}
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="text-center text-sm text-gray-600">
-            <p>AI-Powered Dashboard © 2025 | Built with React, Vega-Lite, and Sequelize</p>
-            <p className="mt-1">Generate dynamic charts from natural language queries</p>
-          </div>
-        </div>
-      </footer>
-
-      {/* Toast Notifications */}
-      {successMessage && (
-        <Toast 
-          message={successMessage}
-          type="success"
-          onClose={clearSuccessMessage}
-        />
-      )}
-      
-      {error && (
-        <Toast 
-          message={error}
-          type="error"
-          onClose={clearError}
-          duration={5000}  // Longer duration for errors
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={closeToast}
         />
       )}
     </div>

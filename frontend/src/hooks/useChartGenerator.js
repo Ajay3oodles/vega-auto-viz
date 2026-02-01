@@ -123,7 +123,8 @@ const useChartGenerator = () => {
     chartData,
     error,
     successMessage,
-    
+    setChartData,
+
     // Methods
     generateChart: handleGenerateChart,
     retry: handleRetry,
@@ -133,4 +134,8 @@ const useChartGenerator = () => {
   };
 };
 
+
+
 export default useChartGenerator;
+
+

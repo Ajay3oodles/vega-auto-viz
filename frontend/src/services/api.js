@@ -121,5 +121,20 @@ export const checkBackendHealth = async () => {
   }
 };
 
+export const fetchLastWidget = async () => {
+  try {
+    const response = await apiClient.get('/widgets/last');
+    console.log(response)
+    return response.data.widget;
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message ||
+      error.message ||
+      'Failed to fetch last widget'
+    );
+  }
+};
+
+
 // Export the configured axios instance for custom requests if needed
 export default apiClient;

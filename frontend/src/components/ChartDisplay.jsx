@@ -147,7 +147,7 @@ const ChartDisplay = ({ chartData, onCopy, onDownload }) => {
       </div>
 
       {/* SQL Query Display (Collapsible) */}
-      <details className="card cursor-pointer group">
+      {/* <details className="card cursor-pointer group">
         <summary className="font-semibold text-gray-900 flex items-center justify-between">
           <span className="flex items-center gap-2">
             <Database className="w-5 h-5 text-primary-600" />
@@ -169,7 +169,7 @@ const ChartDisplay = ({ chartData, onCopy, onDownload }) => {
             Download SQL
           </button>
         </div>
-      </details>
+      </details> */}
 
       {/* Data Preview (Collapsible) */}
       <details className="card cursor-pointer group">

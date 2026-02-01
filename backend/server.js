@@ -52,7 +52,7 @@ app.get('/', (req, res) => {
 // app.use('/api/users', userRoutes);
 // app.use('/api/products', productRoutes);
 // app.use('/api/sales', saleRoutes);
-app.use('/api/chart-data', chartRoutes);
+app.use('/api/ai-chart', chartRoutes);
 
 // Swagger docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

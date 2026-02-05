@@ -21,6 +21,6 @@ export default function applyAssociations(models) {
   });
 
   // User → Widgets
-  User.hasMany(Widget, { foreignKey: 'created_by', as: 'widgets' });
-  Widget.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+  // User.hasMany(Widget, { foreignKey: 'created_by', as: 'widgets' });
+  // Widget.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
 }

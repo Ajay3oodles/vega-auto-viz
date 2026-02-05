@@ -1,30 +1,93 @@
 // services/widgetService.js
-import Widget from '../models/Widget.js';
+
+import models from '../models/index.js';
+const { Widget } = models;
 
 /**
- * Save widget and mark as last
+ * Save widget
+ * isNew = true  → ALWAYS create new widget
+ * isNew = false → update existing widget by ID
  */
-export async function saveWidget(widgetData) {
-  // Unmark all as last
-  await Widget.update({ isLastWidget: false }, { where: { isLastWidget: true } });
-  
-  // Create new widget marked as last
-  return await Widget.create({
-    name: widgetData.name || `Chart - ${new Date().toLocaleDateString()}`,
-    prompt: widgetData.prompt,
-    sqlQuery: widgetData.sqlQuery,
-    vegaSpec: widgetData.vegaSpec,
-    analysis: widgetData.analysis,
+export async function saveWidget({
+  isNew,
+  widgetId,
+  name,
+  prompt,
+  sqlQuery,
+  vegaSpec,
+  analysis
+}) {
+  console.log('💾 Saving widget...', { isNew, widgetId, name });
+
+  // Unmark all previous widgets as "last"
+  await Widget.update(
+    { isLastWidget: false },
+    { where: { isLastWidget: true } }
+  );
+
+  if (isNew) {
+    // ✅ ALWAYS CREATE NEW WIDGET
+    console.log('🆕 Creating NEW widget');
+    const newWidget = await Widget.create({
+      name: name || `Chart - ${new Date().toISOString().split('T')[0]}`,
+      prompt,
+      sqlQuery,
+      vegaSpec,
+      analysis,
+      isLastWidget: true
+    });
+    console.log('✅ New widget created:', newWidget.id);
+    return newWidget;
+  }
+
+  // ✏️ UPDATE EXISTING WIDGET
+  if (!widgetId) {
+    throw new Error('widgetId required when isNew=false');
+  }
+
+  console.log('✏️ Updating existing widget:', widgetId);
+  const existingWidget = await Widget.findByPk(widgetId);
+
+  if (!existingWidget) {
+    throw new Error(`Widget ${widgetId} not found`);
+  }
+
+  await existingWidget.update({
+    name,
+    prompt,
+    sqlQuery,
+    vegaSpec,
+    analysis,
     isLastWidget: true
+  });
+
+  console.log('✅ Widget updated:', widgetId);
+  return existingWidget;
+}
+
+/**
+ * Get last widget
+ */
+export async function getLastWidget() {
+  return Widget.findOne({
+    where: { isLastWidget: true },
+    order: [['updatedAt', 'DESC']]
   });
 }
 
 /**
- * Get last saved widget
+ * Get list of widgets (id + name only)
  */
-export async function getLastWidget() {
-  return await Widget.findOne({
-    where: { isLastWidget: true },
-    order: [['createdAt', 'DESC']]
+export async function getAllWidgetsList() {
+  return await Widget.findAll({
+    attributes: ['id', 'name', 'createdAt'],
+    order: [['updatedAt', 'DESC']]
   });
+}
+
+/**
+ * Get full widget data by ID
+ */
+export async function getWidgetById(widgetId) {
+  return await Widget.findByPk(widgetId);
 }

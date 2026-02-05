@@ -13,6 +13,7 @@ import { sequelize } from './src/models/index.js';
 // import productRoutes from './src/routes/productRoutes.js';
 // import saleRoutes from './src/routes/saleRoutes.js';
 import chartRoutes from './src/routes/aiChartRoutes.js';
+import widgetRoutes from './src/routes/widgetRoutes.js';
 
 // Seeder
 // import { seedDatabase } from './src/utils/seeder.js';
@@ -53,6 +54,7 @@ app.get('/', (req, res) => {
 // app.use('/api/products', productRoutes);
 // app.use('/api/sales', saleRoutes);
 app.use('/api/ai-chart', chartRoutes);
+app.use('/api/ai-chart', widgetRoutes);
 
 // Swagger docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

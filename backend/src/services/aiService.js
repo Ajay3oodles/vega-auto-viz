@@ -220,6 +220,12 @@ CRITICAL REMINDERS:
 • Do NOT guess or invent tables/columns not in the schema
 • Do NOT use "temporal" for month/year aggregations - use "ordinal"
 • Ensure field names in Vega encoding exactly match SQL column aliases
+
+In addition to SQL, Vega-Lite spec, and analysis:
+• Generate a short widgetName (3–6 words)
+• Use Title Case
+• Be descriptive but concise
+• Do NOT include dates unless user asks
 `;
 }
 

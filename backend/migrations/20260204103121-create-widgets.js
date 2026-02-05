@@ -2,15 +2,15 @@
 export async function up(queryInterface, Sequelize) {
   await queryInterface.createTable('widgets', {
       id: {
-        type: DataTypes.BIGINT,
+        type: Sequelize.BIGINT,
         autoIncrement: true,
         primaryKey: true
       },
 
-    user_id: {
-      type: Sequelize.UUID,
-      allowNull: false
-    },
+    // user_id: {
+    //   type: Sequelize.UUID,
+    //   allowNull: false
+    // },
 
     name: {
       type: Sequelize.STRING(150),

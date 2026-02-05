@@ -1,21 +1,22 @@
-import { Sequelize } from 'sequelize';
-import dotenv from 'dotenv';
+import sequelize from '../config/database.js';
 
-dotenv.config();
+import UserModel from './User.js';
+import ProductModel from './Product.js';
+import OrderModel from './Order.js';
+import OrderItemModel from './OrderItem.js';
+import WidgetModel from './Widget.js';
 
-export const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
-  {
-    host: process.env.DB_HOST,
-    dialect: 'postgres',
-    logging: false,
-  }
-);
+import applyAssociations from './Associations.js';
 
-const db = {};
-db.sequelize = sequelize;
-db.Sequelize = Sequelize;
+const models = {
+  User: UserModel(sequelize),
+  Product: ProductModel(sequelize),
+  Order: OrderModel(sequelize),
+  OrderItem: OrderItemModel(sequelize),
+  Widget: WidgetModel(sequelize)
+};
 
-export default db;
+applyAssociations(models);
+
+export { sequelize };
+export default models;

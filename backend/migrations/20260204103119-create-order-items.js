@@ -6,7 +6,7 @@ export async function up(queryInterface, Sequelize) {
       primaryKey: true
     },
     order_id: {
-      type: Sequelize.UUID,
+      type: Sequelize.BIGINT,
       allowNull: false,
       references: {
         model: 'orders',

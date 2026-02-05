@@ -1,34 +1,33 @@
 // controllers/aiChartController.js
 // Thin controller - delegates to services and utils
-// Follows separation of concerns principle
 
-import { saveWidget, getLastWidget } from '../services/widgetService.js';
-import { getCachedSchema, clearSchemaCache, getDatabaseStats } from '../utils/databaseSchema.js';
-import { generateChartWithAI, testOpenAIConnection, getModelInfo } from '../services/aiService.js';
-import { executeQuery, validateQuery, testConnection, getDatabaseMetadata } from '../services/databaseService.js';
-import { 
-  validateVegaSpec, 
-  enhanceVegaSpec, 
-  convertChartData, 
+// controllers/aiChartController.js
+// Thin controller - delegates to services and utils
+
+import { saveWidget,getLastWidget } from '../services/widgetService.js';
+import { getCachedSchema } from '../utils/databaseSchema.js';
+import { generateChartWithAI } from '../services/aiService.js';
+import { executeQuery, validateQuery } from '../services/databaseService.js';
+import {
+  validateVegaSpec,
+  enhanceVegaSpec,
   generateChartSummary,
-  suggestAlternativeCharts 
+  suggestAlternativeCharts
 } from '../services/chartService.js';
-import { validatePrompt, validateTableName } from '../utils/validation.js';
-import { formatNumber, formatRelativeTime } from '../utils/helpers.js';
+import { validatePrompt } from '../utils/validation.js';
 
-/**
- * Generate chart from natural language prompt
- * 
- * @route POST /api/ai-chart
- * @body { prompt: string, options?: Object }
- */
+// Fix for generateChartFromPrompt in controllers/aiChartController.js
+
 export const generateChartFromPrompt = async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const { prompt, options = {} } = req.body;
+    // ✅ Get isNew from BODY (not query param)
+    const { prompt, isNew = true, widgetId = null, options = {} } = req.body;
 
-    // Validate input
+    console.log('📝 Request:', { prompt, isNew, widgetId });
+
+    // 1️⃣ Validate prompt
     const promptValidation = validatePrompt(prompt);
     if (!promptValidation.valid) {
       return res.status(400).json({
@@ -38,147 +37,118 @@ export const generateChartFromPrompt = async (req, res) => {
       });
     }
 
-    console.log('📝 User prompt:', prompt);
-
-    // Get database schema
-    console.log('🔍 Fetching database schema...');
+    // 2️⃣ Load DB schema
     const schema = await getCachedSchema();
-    console.log(`📊 Database: ${schema.database} (${schema.dialect})`);
-    console.log(`📋 Tables: ${schema.tables.map(t => t.name).join(', ')}`);
 
-    // Generate SQL and Vega spec using AI
-    console.log('🤖 Generating chart with AI...');
+    // 3️⃣ Generate SQL + Vega via AI
     const aiResponse = await generateChartWithAI(prompt, schema);
-    console.log('✅ AI generation successful');
 
-    // Validate generated SQL
+    const widgetName = aiResponse.widgetName?.trim() || 
+      `Chart - ${prompt.slice(0, 40)}${prompt.length > 40 ? '...' : ''}`;
+
+    // 4️⃣ Validate SQL
     const sqlValidation = validateQuery(aiResponse.sqlQuery, schema);
     if (!sqlValidation.valid) {
       return res.status(400).json({
         success: false,
         message: 'Generated SQL is invalid',
-        errors: sqlValidation.errors,
-        warnings: sqlValidation.warnings
+        errors: sqlValidation.errors
       });
     }
 
-    // Execute query
+    // 5️⃣ Execute SQL
     console.log('💾 Executing SQL query...');
-    const data = await executeQuery(aiResponse.sqlQuery, {
+    const rawData = await executeQuery(aiResponse.sqlQuery, {
       timeout: options.timeout || 30000,
       maxRows: options.maxRows || 10000
     });
 
-    // 🔥 Normalize numeric values
-    const normalizedData = data.map(row => {
-    const normalized = { ...row };
-     for (const key in normalized) {
-      const value = normalized[key];
-      if (typeof value === 'string' && value.trim() !== '' && !isNaN(value)) {
-      normalized[key] = Number(value);
-     }
-   }
-  return normalized;
-  });
-
+    // 6️⃣ Normalize data
+    const normalizedData = rawData.map(row => {
+      const normalized = { ...row };
+      for (const key in normalized) {
+        const value = normalized[key];
+        if (typeof value === 'string' && value.trim() !== '' && !isNaN(value)) {
+          normalized[key] = Number(value);
+        }
+      }
+      return normalized;
+    });
 
     const executionTime = Date.now() - startTime;
-    console.log(`✅ Query completed in ${executionTime}ms, ${data.length} rows`);
 
-if (data.length === 0) {
-  const emptySpec = {
-    $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
-    mark: 'text',
-    data: { values: [] },
-    encoding: {},
-    title: 'No data available for this query'
-  };
+    // 7️⃣ Empty result handling
+    if (normalizedData.length === 0) {
+      return res.status(200).json({
+        success: true,
+        prompt,
+        dataCount: 0,
+        data: [],
+        executionTime,
+        vegaSpec: {
+          $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+          mark: 'text',
+          data: { values: [] },
+          title: 'No data available'
+        }
+      });
+    }
 
-  return res.status(200).json({
-    success: true,
-    prompt,
-    analysis: aiResponse.analysis,
-    sql: aiResponse.sqlQuery,
-    dataCount: 0,
-    data: [],
-    executionTime,
-    message: 'Query executed successfully but returned no data.',
-    vegaSpec: emptySpec
-  });
-}
-
-
-    // Validate and enhance Vega spec
+    // 8️⃣ Enhance Vega spec
     const vegaValidation = validateVegaSpec(aiResponse.vegaSpec);
     if (!vegaValidation.valid) {
-      console.warn('⚠️  Vega spec validation failed:', vegaValidation.errors);
+      console.warn('⚠️ Vega spec validation failed:', vegaValidation.errors);
     }
 
     const enhancedVegaSpec = enhanceVegaSpec(
-      aiResponse.vegaSpec, 
+      aiResponse.vegaSpec,
       normalizedData,
       options.chartOptions || {}
     );
-    
+
     const analysis = normalizeAnalysis(aiResponse.analysis, normalizedData);
+    const summary = generateChartSummary(normalizedData, analysis);
+    const alternatives = suggestAlternativeCharts(normalizedData, analysis);
 
-    // Generate summary statistics
-    const summary = generateChartSummary(normalizedData,analysis);
-
-    // Suggest alternative chart types
-    const alternatives = suggestAlternativeCharts(normalizedData,analysis);
-
-
-     // Save widget (don't wait for it)
+    // 9️⃣ SAVE WIDGET (async, don't wait)
     saveWidget({
+      isNew,
+      widgetId,
+      name: widgetName,
       prompt,
       sqlQuery: aiResponse.sqlQuery,
       vegaSpec: enhancedVegaSpec,
       analysis: aiResponse.analysis
-    }).catch(err => console.error('Widget save failed:', err));
+    }).catch(err => console.error('❌ Widget save failed:', err));
 
-    // Return response
+    // 🔟 Return response
     res.status(200).json({
       success: true,
       prompt,
-      analysis: aiResponse.analysis,
-      sql: aiResponse.sqlQuery,
-      dataCount: data.length,
-      data,
+      analysis,
+      dataCount: normalizedData.length,
+      data: normalizedData,
       vegaSpec: enhancedVegaSpec,
       executionTime,
       summary,
       alternatives,
-      explanation: aiResponse.explanation,
-      tokensUsed: aiResponse.tokensUsed,
-      database: {
-        name: schema.database,
-        dialect: schema.dialect
-      }
+      explanation: aiResponse.explanation
     });
 
   } catch (error) {
     console.error('❌ Error generating chart:', error);
-
-    // Determine error type and respond appropriately
-    const statusCode = error.name === 'DatabaseError' ? 500 : 500;
-    
-    res.status(statusCode).json({
+    res.status(500).json({
       success: false,
       message: 'Failed to generate chart',
       error: error.message,
-      executionTime: Date.now() - startTime,
-      hint: getErrorHint(error)
+      executionTime: Date.now() - startTime
     });
   }
 };
 
 function normalizeAnalysis(analysis, data) {
   const sample = data[0] || {};
-  const numericCols = Object.keys(sample).filter(
-    k => typeof sample[k] === 'number'
-  );
-
+  const numericCols = Object.keys(sample).filter(k => typeof sample[k] === 'number');
   return {
     ...analysis,
     groupByField: analysis.groupBy,

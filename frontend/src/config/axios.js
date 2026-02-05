@@ -13,7 +13,7 @@ const axiosInstance = axios.create({
 });
 
 // Add request interceptor for logging (optional)
-axiosInstance.interceptors.request.use(
+axiosInstance.interceptorzs.request.use(
   (config) => {
     console.log('API Request:', config.method.toUpperCase(), config.url);
     return config;

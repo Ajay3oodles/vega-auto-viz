@@ -61,18 +61,25 @@ apiClient.interceptors.response.use(
  * Generate chart from natural language prompt
  * 
  * @param {string} prompt - Natural language query (e.g., "Show sales by category")
+ * @param {boolean} isNew - Whether to create new widget or update existing
+ * @param {string} widgetId - Widget ID (required if isNew=false)
  * @returns {Promise<Object>} Response containing chart data and Vega-Lite spec
  * 
  * Example usage:
- * const result = await generateChart("Show total sales by region");
+ * const result = await generateChart("Show total sales by region", true);
  * console.log(result.vegaSpec); // Vega-Lite specification
  * console.log(result.data);     // Raw data from database
  */
-export const generateChart = async (prompt) => {
+export const generateChart = async (prompt, isNew = true, widgetId = null) => {
   try {
-    const response = await apiClient.post('/chart-data', { prompt });
+    const response = await apiClient.post('/ai-chart', { 
+      prompt,
+      isNew,
+      widgetId
+    });
     return response.data;
   } catch (error) {
+    // Re-throw with more context
     throw new Error(
       error.response?.data?.message || 
       error.message || 
@@ -81,6 +88,61 @@ export const generateChart = async (prompt) => {
   }
 };
 
+/**
+ * Get list of all widgets
+ * 
+ * @returns {Promise<Object>} Response containing array of widgets
+ */
+export const getAllWidgets = async () => {
+  try {
+    const response = await apiClient.get('/ai-chart/widgets');
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to fetch widgets'
+    );
+  }
+};
+
+/**
+ * Get widget by ID
+ * 
+ * @param {string} widgetId - Widget UUID
+ * @returns {Promise<Object>} Response containing full widget data
+ */
+export const getWidgetById = async (widgetId) => {
+  try {
+    const response = await apiClient.get(`/ai-chart/widgets/${widgetId}`);
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to fetch widget'
+    );
+  }
+};
+
+/**
+ * Delete widget by ID
+ * 
+ * @param {string} widgetId - Widget UUID
+ * @returns {Promise<Object>} Response confirming deletion
+ */
+export const deleteWidget = async (widgetId) => {
+  try {
+    const response = await apiClient.delete(`/ai-chart/widgets/${widgetId}`);
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to delete widget'
+    );
+  }
+};
 
 /**
  * Get example prompts from backend
@@ -120,21 +182,6 @@ export const checkBackendHealth = async () => {
     throw new Error('Backend is not responding');
   }
 };
-
-export const fetchLastWidget = async () => {
-  try {
-    const response = await apiClient.get('/widgets/last');
-    console.log(response)
-    return response.data.widget;
-  } catch (error) {
-    throw new Error(
-      error.response?.data?.message ||
-      error.message ||
-      'Failed to fetch last widget'
-    );
-  }
-};
-
 
 // Export the configured axios instance for custom requests if needed
 export default apiClient;

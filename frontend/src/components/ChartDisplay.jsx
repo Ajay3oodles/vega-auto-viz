@@ -12,6 +12,7 @@ import { copyToClipboard, downloadJSON, formatNumber } from '../utils';
 import { VEGA_THEME } from '../constants';
 
 const ChartDisplay = ({ chartData, onCopy, onDownload }) => {
+  console.log('Rendering ChartDisplay with data:', chartData);
   // If no chart data is provided, don't render anything
   if (!chartData) return null;
 
@@ -53,13 +54,50 @@ const ChartDisplay = ({ chartData, onCopy, onDownload }) => {
   };
 
   // Apply custom theme to Vega spec
-  const themedSpec = {
-    ...vegaSpec,
-    config: {
-      ...vegaSpec.config,
+  // Apply custom theme to Vega spec
+  // Apply custom theme and fix tooltips dynamically
+  const themedSpec = (() => {
+    if (!vegaSpec) return null;
+    
+    // Deep clone to safely modify
+    const spec = JSON.parse(JSON.stringify(vegaSpec));
+    
+    // 1. Set standard tooltip on mark
+    if (spec.mark) {
+      spec.mark = typeof spec.mark === 'object' 
+        ? { ...spec.mark, tooltip: true } 
+        : { type: spec.mark, tooltip: true };
+    }
+
+    // 2. Explicitly map data fields to tooltip to prevent the literal "true" bug
+    if (spec.encoding && !spec.encoding.tooltip) {
+      const tooltipFields = [];
+      Object.keys(spec.encoding).forEach(channel => {
+        const def = spec.encoding[channel];
+        // If the encoding uses a data field, add it to our tooltip list
+        if (def && def.field) {
+          tooltipFields.push({
+            field: def.field,
+            type: def.type,
+            title: def.title || def.field
+          });
+        }
+      });
+      
+      // Inject the explicit tooltip fields
+      if (tooltipFields.length > 0) {
+        spec.encoding.tooltip = tooltipFields;
+      }
+    }
+
+    // 3. Apply Theme config (without the buggy global tooltip overrides)
+    spec.config = {
+      ...spec.config,
       ...VEGA_THEME,
-    },
-  };
+    };
+
+    return spec;
+  })();
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -102,7 +140,7 @@ const ChartDisplay = ({ chartData, onCopy, onDownload }) => {
         </div>
 
         {/* Chart Statistics */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-t border-b border-gray-200">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 py-4 border-t border-b border-gray-200">
           <div className="text-center">
             <div className="text-2xl font-bold text-primary-600">
               {formatNumber(dataCount)}
@@ -115,12 +153,12 @@ const ChartDisplay = ({ chartData, onCopy, onDownload }) => {
             </div>
             <div className="text-xs text-gray-600 mt-1">Chart Type</div>
           </div>
-          <div className="text-center">
+          {/* <div className="text-center">
             <div className="text-2xl font-bold text-blue-600 truncate">
               {analysis.groupBy || 'N/A'}
             </div>
             <div className="text-xs text-gray-600 mt-1">Grouped By</div>
-          </div>
+          </div> */}
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600 uppercase">
               {analysis.aggregation}

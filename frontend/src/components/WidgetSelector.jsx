@@ -83,7 +83,7 @@ const WidgetSelector = ({
           </div>
 
           {/* Widget Dropdown Selector */}
-          <div className="flex-1 max-w-md relative">
+          <div className="flex-1 max-w-md relative " style={{ width: '300px' }}> 
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               disabled={isLoading || widgets.length === 0}
@@ -151,7 +151,7 @@ const WidgetSelector = ({
                             {widget.prompt}
                           </div>
                           <div className="text-xs text-gray-400 mt-1">
-                            ID: {widget.id} • Created: {formatDate(widget.createdAt)}
+                             Created: {formatDate(widget.createdAt)}
                           </div>
                         </div>
                       </button>
@@ -193,6 +193,7 @@ const WidgetSelector = ({
         </div>
 
         {/* Selected Widget Dropdown */}
+        <div className="flex items-center gap-2">
         <div className="flex-1 max-w-md relative">
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -208,9 +209,9 @@ const WidgetSelector = ({
                   <div className="font-medium text-gray-900 truncate">
                     {selectedWidget.name}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  {/* <div className="text-xs text-gray-500">
                     ID: {selectedWidget.id}
-                  </div>
+                  </div> */}
                 </>
               ) : (
                 <span className="text-gray-500">Select widget...</span>
@@ -273,7 +274,7 @@ const WidgetSelector = ({
                           {widget.prompt}
                         </div>
                         <div className="text-xs text-gray-400 mt-1">
-                          ID: {widget.id} • Created: {formatDate(widget.createdAt)}
+                          Created: {formatDate(widget.createdAt)}
                         </div>
                       </div>
                       
@@ -299,6 +300,7 @@ const WidgetSelector = ({
         >
           <X className="w-5 h-5" />
         </button>
+        </div>
       </div>
 
       {/* Info Text */}

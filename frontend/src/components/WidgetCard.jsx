@@ -6,22 +6,17 @@ import { formatNumber, formatDate } from '../utils';
 const WidgetCard = ({ widget, onEdit, onDelete }) => {
   const getCardSpan = () => {
     const chartType = widget.analysis?.chartType?.toLowerCase() || '';
-    // Bar charts span 2 columns
     if (chartType === 'bar' || chartType.includes('line') || chartType.includes('area') || chartType.includes('scatter')) {
       return 'md:col-span-2';
     }
-    // Pie/arc charts span 1 column
     return 'md:col-span-1';
   };
 
   const getChartDimensions = () => {
     const chartType = widget.analysis?.chartType?.toLowerCase() || '';
-    
     if (chartType === 'bar' || chartType.includes('line')) {
-      // Wide charts - bar/line
       return { width: 600, height: 300 };
     }
-    // Square charts - pie/arc
     return { width: 300, height: 300 };
   };
 
@@ -33,19 +28,32 @@ const WidgetCard = ({ widget, onEdit, onDelete }) => {
     }
   };
 
+// Locate getCardSpec and update the return object:
   const getCardSpec = () => {
     if (!widget.vegaSpec) return null;
-
     try {
       const { width, height } = getChartDimensions();
       const chartType = widget.analysis?.chartType?.toLowerCase() || '';
       
-      const cardSpec = {
+      return {
         ...widget.vegaSpec,
         width,
         height,
+        // Safely apply tooltip to mark if it exists
+        ...(widget.vegaSpec.mark ? {
+          mark: typeof widget.vegaSpec.mark === 'object' 
+            ? { ...widget.vegaSpec.mark, tooltip: true } 
+            : { type: widget.vegaSpec.mark, tooltip: true }
+        } : {}),
         config: {
+          ...widget.vegaSpec.config,
           view: { stroke: null },
+          // Force tooltips globally for all chart types (fixes Pie/arc)
+          mark: { ...widget.vegaSpec.config?.mark, tooltip: true },
+          arc: { ...widget.vegaSpec.config?.arc, tooltip: true },
+          bar: { ...widget.vegaSpec.config?.bar, tooltip: true },
+          line: { ...widget.vegaSpec.config?.line, tooltip: true },
+          point: { ...widget.vegaSpec.config?.point, tooltip: true },
           axis: { 
             labelFontSize: 11, 
             titleFontSize: 12, 
@@ -59,10 +67,7 @@ const WidgetCard = ({ widget, onEdit, onDelete }) => {
           },
         },
       };
-
-      return cardSpec;
     } catch (error) {
-      console.error('Error creating card spec:', error);
       return null;
     }
   };
@@ -128,25 +133,16 @@ const WidgetCard = ({ widget, onEdit, onDelete }) => {
               <TrendingUp className="w-3.5 h-3.5 text-primary-600" />
               <span className="font-medium">{chartType}</span>
             </div>
-            
             <div className="flex items-center gap-1 text-gray-600">
               <span className="font-semibold text-primary-600">{formatNumber(dataCount)}</span>
               <span>rows</span>
             </div>
           </div>
-          
           <div className="flex items-center gap-1 text-gray-500">
             <Calendar className="w-3.5 h-3.5" />
             <span>{formatDate(widget.createdAt, 'short')}</span>
           </div>
         </div>
-      </div>
-
-      {/* Widget ID Badge */}
-      <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-        <span className="text-xs bg-gray-900 text-white px-2 py-1 rounded shadow-lg">
-          ID: {widget.id}
-        </span>
       </div>
     </div>
   );

@@ -5,6 +5,7 @@
 // Thin controller - delegates to services and utils
 
 import { saveWidget,getLastWidget } from '../services/widgetService.js';
+import { beautifyVegaSpec,snakeToTitle } from '../utils/labelFormatter.js';
 import { getCachedSchema } from '../utils/databaseSchema.js';
 import { generateChartWithAI } from '../services/aiService.js';
 import { executeQuery, validateQuery } from '../services/databaseService.js';
@@ -101,25 +102,28 @@ export const generateChartFromPrompt = async (req, res) => {
     }
 
     const enhancedVegaSpec = enhanceVegaSpec(
-      aiResponse.vegaSpec,
-      normalizedData,
-      options.chartOptions || {}
+    aiResponse.vegaSpec,
+    normalizedData,
+    options.chartOptions || {}
     );
+
+    const beautifiedVegaSpec = beautifyVegaSpec(enhancedVegaSpec);
+
+
 
     const analysis = normalizeAnalysis(aiResponse.analysis, normalizedData);
     const summary = generateChartSummary(normalizedData, analysis);
     const alternatives = suggestAlternativeCharts(normalizedData, analysis);
 
-    // 9️⃣ SAVE WIDGET (async, don't wait)
     saveWidget({
-      isNew,
-      widgetId,
-      name: widgetName,
-      prompt,
-      sqlQuery: aiResponse.sqlQuery,
-      vegaSpec: enhancedVegaSpec,
-      analysis: aiResponse.analysis
-    }).catch(err => console.error('❌ Widget save failed:', err));
+    isNew,
+    widgetId,
+    name: widgetName,
+    prompt,
+    sqlQuery: aiResponse.sqlQuery,
+    vegaSpec: beautifiedVegaSpec, // ✅ correct
+    analysis: aiResponse.analysis
+    });
 
     // 🔟 Return response
     res.status(200).json({
@@ -128,7 +132,7 @@ export const generateChartFromPrompt = async (req, res) => {
       analysis,
       dataCount: normalizedData.length,
       data: normalizedData,
-      vegaSpec: enhancedVegaSpec,
+      vegaSpec: beautifiedVegaSpec, // ✅
       executionTime,
       summary,
       alternatives,
@@ -146,13 +150,19 @@ export const generateChartFromPrompt = async (req, res) => {
   }
 };
 
+
 function normalizeAnalysis(analysis, data) {
   const sample = data[0] || {};
-  const numericCols = Object.keys(sample).filter(k => typeof sample[k] === 'number');
+  const numericCols = Object.keys(sample).filter(
+    k => typeof sample[k] === 'number'
+  );
+
   return {
     ...analysis,
     groupByField: analysis.groupBy,
-    valueField: numericCols[0] || null
+    groupByLabel: snakeToTitle(analysis.groupBy),
+    valueField: numericCols[0] || null,
+    valueLabel: snakeToTitle(numericCols[0])
   };
 }
 

@@ -178,6 +178,7 @@ RESPONSE FORMAT (STRICT JSON)
 Return ONLY a valid JSON object with NO additional text, markdown, or code blocks:
 
 {
+  "widgetName": "3-6 word descriptive title in Title Case",
   "analysis": {
     "intent": "Clear description of what the user wants to see",
     "tablesUsed": ["table_name_1", "table_name_2"],
@@ -215,11 +216,12 @@ Return ONLY a valid JSON object with NO additional text, markdown, or code block
 }
 
 CRITICAL REMINDERS:
-• Do NOT include actual data in vegaSpec (values must be empty array)
-• Do NOT add commentary, preamble, or markdown formatting
-• Do NOT guess or invent tables/columns not in the schema
-• Do NOT use "temporal" for month/year aggregations - use "ordinal"
-• Ensure field names in Vega encoding exactly match SQL column aliases
+- Do NOT include actual data in vegaSpec (values must be empty array)
+- Do NOT add commentary, preamble, or markdown formatting
+- Do NOT guess or invent tables/columns not in the schema
+- Do NOT use "temporal" for month/year aggregations - use "ordinal"
+- Ensure field names in Vega encoding exactly match SQL column aliases
+- widgetName should be concise (3-6 words) and in Title Case
 
 In addition to SQL, Vega-Lite spec, and analysis:
 • Generate a short widgetName (3–6 words)

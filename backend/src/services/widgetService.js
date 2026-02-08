@@ -76,7 +76,7 @@ export async function getLastWidget() {
 }
 
 /**
- * Get list of widgets (id + name only)
+ * Get list of widgets (id + name only) - LIGHTWEIGHT
  */
 export async function getAllWidgetsList() {
   return await Widget.findAll({
@@ -86,8 +86,33 @@ export async function getAllWidgetsList() {
 }
 
 /**
+ * ✅ NEW: Get all widgets with FULL data for dashboard
+ */
+export async function getAllWidgetsFull() {
+  return Widget.findAll({
+    order: [['updatedAt', 'DESC']]
+  });
+}
+
+/**
  * Get full widget data by ID
  */
 export async function getWidgetById(widgetId) {
   return await Widget.findByPk(widgetId);
+}
+
+
+/**
+ * Delete a widget by its ID
+ */
+export async function deleteWidgetById(widgetId) {
+  console.log('🗑️ Deleting widget:', widgetId);
+
+  // The `destroy` method returns the number of rows deleted.
+  const numDeletedRows = await Widget.destroy({
+    where: { id: widgetId }
+  });
+
+  console.log(`✅ Rows deleted: ${numDeletedRows}`);
+  return numDeletedRows;
 }

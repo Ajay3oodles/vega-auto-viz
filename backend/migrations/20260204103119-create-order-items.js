@@ -15,7 +15,7 @@ export async function up(queryInterface, Sequelize) {
       onDelete: 'CASCADE'
     },
     product_id: {
-      type: Sequelize.UUID,
+      type: Sequelize.BIGINT,
       allowNull: false,
       references: {
         model: 'products',

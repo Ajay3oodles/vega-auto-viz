@@ -1,11 +1,8 @@
 // controllers/aiChartController.js
-// Thin controller - delegates to services and utils
+// ONLY THIS FILE NEEDS TO BE UPDATED
 
-// controllers/aiChartController.js
-// Thin controller - delegates to services and utils
-
-import { saveWidget,getLastWidget } from '../services/widgetService.js';
-import { beautifyVegaSpec,snakeToTitle } from '../utils/labelFormatter.js';
+import { saveWidget, getLastWidget } from '../services/widgetService.js';
+import { beautifyVegaSpec, snakeToTitle } from '../utils/labelFormatter.js';
 import { getCachedSchema } from '../utils/databaseSchema.js';
 import { generateChartWithAI } from '../services/aiService.js';
 import { executeQuery, validateQuery } from '../services/databaseService.js';
@@ -16,14 +13,12 @@ import {
   suggestAlternativeCharts
 } from '../services/chartService.js';
 import { validatePrompt } from '../utils/validation.js';
-
-// Fix for generateChartFromPrompt in controllers/aiChartController.js
+import { transformDataKeys } from '../utils/dataTransformer.js'; // ✅ ADD THIS IMPORT
 
 export const generateChartFromPrompt = async (req, res) => {
   const startTime = Date.now();
 
   try {
-    // ✅ Get isNew from BODY (not query param)
     const { prompt, isNew = true, widgetId = null, options = {} } = req.body;
 
     console.log('📝 Request:', { prompt, isNew, widgetId });
@@ -95,44 +90,48 @@ export const generateChartFromPrompt = async (req, res) => {
       });
     }
 
-    // 8️⃣ Enhance Vega spec
+    // ✅ TRANSFORM DATA KEYS TO TITLE CASE FOR UI
+    const displayData = transformDataKeys(normalizedData);
+
+    // 8️⃣ Enhance Vega spec with TRANSFORMED data
     const vegaValidation = validateVegaSpec(aiResponse.vegaSpec);
     if (!vegaValidation.valid) {
       console.warn('⚠️ Vega spec validation failed:', vegaValidation.errors);
     }
 
+    // Update Vega spec field names to match transformed data
+    const updatedVegaSpec = updateVegaSpecFields(aiResponse.vegaSpec, normalizedData);
+
     const enhancedVegaSpec = enhanceVegaSpec(
-    aiResponse.vegaSpec,
-    normalizedData,
-    options.chartOptions || {}
+      updatedVegaSpec,
+      displayData, // ✅ Use transformed data
+      options.chartOptions || {}
     );
 
     const beautifiedVegaSpec = beautifyVegaSpec(enhancedVegaSpec);
-
-
 
     const analysis = normalizeAnalysis(aiResponse.analysis, normalizedData);
     const summary = generateChartSummary(normalizedData, analysis);
     const alternatives = suggestAlternativeCharts(normalizedData, analysis);
 
     saveWidget({
-    isNew,
-    widgetId,
-    name: widgetName,
-    prompt,
-    sqlQuery: aiResponse.sqlQuery,
-    vegaSpec: beautifiedVegaSpec, // ✅ correct
-    analysis: aiResponse.analysis
+      isNew,
+      widgetId,
+      name: widgetName,
+      prompt,
+      sqlQuery: aiResponse.sqlQuery,
+      vegaSpec: beautifiedVegaSpec,
+      analysis: aiResponse.analysis
     });
 
-    // 🔟 Return response
+    // 🔟 Return response with transformed data
     res.status(200).json({
       success: true,
       prompt,
       analysis,
-      dataCount: normalizedData.length,
-      data: normalizedData,
-      vegaSpec: beautifiedVegaSpec, // ✅
+      dataCount: displayData.length, // ✅ Use displayData length
+      data: displayData,              // ✅ Return transformed data
+      vegaSpec: beautifiedVegaSpec,
       executionTime,
       summary,
       alternatives,
@@ -150,7 +149,6 @@ export const generateChartFromPrompt = async (req, res) => {
   }
 };
 
-
 function normalizeAnalysis(analysis, data) {
   const sample = data[0] || {};
   const numericCols = Object.keys(sample).filter(
@@ -164,6 +162,37 @@ function normalizeAnalysis(analysis, data) {
     valueField: numericCols[0] || null,
     valueLabel: snakeToTitle(numericCols[0])
   };
+}
+
+/**
+ * Update Vega spec field names to match transformed data
+ * Converts snake_case field names to Title Case
+ */
+function updateVegaSpecFields(vegaSpec, originalData) {
+  if (!vegaSpec.encoding || !originalData.length) {
+    return vegaSpec;
+  }
+
+  const spec = JSON.parse(JSON.stringify(vegaSpec)); // Deep clone
+
+  // Update encoding field names
+  Object.keys(spec.encoding).forEach(channel => {
+    const encoding = spec.encoding[channel];
+    if (encoding.field) {
+      // Convert snake_case to Title Case
+      encoding.field = snakeToTitle(encoding.field.toLowerCase());
+    }
+  });
+
+  // Update tooltip field names if present
+  if (spec.encoding.tooltip && Array.isArray(spec.encoding.tooltip)) {
+    spec.encoding.tooltip = spec.encoding.tooltip.map(t => ({
+      ...t,
+      field: snakeToTitle(t.field.toLowerCase())
+    }));
+  }
+
+  return spec;
 }
 
 

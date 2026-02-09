@@ -1,0 +1,177 @@
+/* Enhanced Widget Dashboard Styling */
+
+/* Responsive Grid System for Auto-sizing Widgets */
+.widget-dashboard-grid {
+  display: grid;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+/* Mobile: Single column */
+@media (max-width: 640px) {
+  .widget-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tablet: 2 columns */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .widget-dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .widget-card-wide {
+    grid-column: span 2;
+  }
+}
+
+/* Desktop: Auto-fit columns with minimum width */
+@media (min-width: 1025px) {
+  .widget-dashboard-grid {
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  }
+  
+  .widget-card-wide {
+    grid-column: span 2;
+  }
+}
+
+/* Large Desktop: Allow more columns for compact widgets */
+@media (min-width: 1536px) {
+  .widget-dashboard-grid {
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  }
+}
+
+/* Widget Card Sizing */
+.widget-card {
+  min-height: 350px;
+  max-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.widget-card-compact {
+  min-height: 350px;
+  max-height: 500px;
+}
+
+.widget-card-wide {
+  min-height: 400px;
+  max-height: 550px;
+}
+
+/* Chart Container Sizing */
+.widget-chart-container {
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.widget-chart-container-compact {
+  min-height: 220px;
+  max-height: 320px;
+}
+
+.widget-chart-container-wide {
+  min-height: 250px;
+  max-height: 400px;
+}
+
+/* Vega Chart Responsive Behavior */
+.widget-chart-container .vega-embed {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.widget-chart-container canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Smooth Transitions */
+.widget-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.widget-card:hover {
+  transform: translateY(-2px);
+}
+
+/* Grid Auto-flow for Mixed Sizes */
+.widget-dashboard-auto-flow {
+  display: grid;
+  grid-auto-flow: dense;
+  gap: 1.5rem;
+}
+
+/* Prevent Layout Shift */
+.widget-card-skeleton {
+  min-height: 350px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Optimize for Different Chart Types */
+.chart-type-bar .widget-chart-container,
+.chart-type-line .widget-chart-container,
+.chart-type-area .widget-chart-container {
+  aspect-ratio: 16 / 9;
+}
+
+.chart-type-pie .widget-chart-container,
+.chart-type-donut .widget-chart-container {
+  aspect-ratio: 1 / 1;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+/* Responsive Text Sizing */
+@media (max-width: 640px) {
+  .widget-card h3 {
+    font-size: 0.95rem;
+  }
+  
+  .widget-card p {
+    font-size: 0.75rem;
+  }
+}
+
+/* Better Scrolling Behavior */
+.widget-dashboard-container {
+  scroll-behavior: smooth;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+}
+
+/* Hide scrollbar but keep functionality */
+.widget-dashboard-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.widget-dashboard-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.widget-dashboard-container::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.widget-dashboard-container::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}

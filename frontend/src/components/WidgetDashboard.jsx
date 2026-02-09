@@ -5,7 +5,7 @@ import WidgetCard from './WidgetCard';
 const WidgetDashboard = ({ widgets, isLoading, onEditWidget, onDeleteWidget, onCreateNew }) => {
   if (isLoading) {
     return (
-      <div className="card">
+      <div className="card max-w-7xl mx-auto">
         <div className="flex flex-col items-center justify-center py-20">
           <Loader2 className="w-12 h-12 text-primary-600 animate-spin mb-4" />
           <p className="text-gray-600">Loading your widgets...</p>
@@ -16,7 +16,7 @@ const WidgetDashboard = ({ widgets, isLoading, onEditWidget, onDeleteWidget, onC
 
   if (!widgets || widgets.length === 0) {
     return (
-      <div className="card">
+      <div className="card max-w-7xl mx-auto">
         <div className="flex flex-col items-center justify-center py-20">
           <div className="bg-gray-100 p-6 rounded-full mb-4">
             <Inbox className="w-12 h-12 text-gray-400" />
@@ -34,42 +34,130 @@ const WidgetDashboard = ({ widgets, isLoading, onEditWidget, onDeleteWidget, onC
     );
   }
 
+  // Categorize widgets by chart type
+  const categorizeWidget = (widget) => {
+    const chartType = widget.analysis?.chartType?.toLowerCase() || '';
+    
+    // Arc/Pie charts
+    if (chartType === 'arc' || chartType.includes('pie') || chartType.includes('donut')) {
+      return 'arc';
+    }
+    // Bar and other wide charts
+    if (chartType === 'bar' || chartType.includes('line') || 
+        chartType.includes('area') || chartType.includes('scatter')) {
+      return 'wide';
+    }
+    return 'compact';
+  };
+
+  // Group widgets by type
+  const wideWidgets = widgets.filter(w => categorizeWidget(w) === 'wide');
+  const arcWidgets = widgets.filter(w => categorizeWidget(w) === 'arc');
+  const compactWidgets = widgets.filter(w => categorizeWidget(w) === 'compact');
+
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       {/* Dashboard Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="bg-primary-100 p-2 rounded-lg">
-            <LayoutGrid className="w-6 h-6 text-primary-600" />
+          <div className="bg-primary-100 p-2 rounded-lg flex-shrink-0">
+            <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-primary-600" />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">My Widgets Dashboard</h2>
-            <p className="text-sm text-gray-600">
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Widgets Dashboard</h2>
+            <p className="text-xs sm:text-sm text-gray-600">
               {widgets.length} {widgets.length === 1 ? 'widget' : 'widgets'} created
             </p>
           </div>
         </div>
 
-        <button onClick={onCreateNew} className="btn-primary flex items-center gap-2">
+        <button onClick={onCreateNew} className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto flex-shrink-0">
           <Plus className="w-5 h-5" />
-          <span className="hidden sm:inline">Create New Widget</span>
+          <span>Create New Widget</span>
         </button>
       </div>
 
-      {/* Widgets Grid - Auto-adjusting based on chart type */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {widgets.map((widget) => (
-          <WidgetCard
-            key={widget.id}
-            widget={widget}
-            onEdit={onEditWidget}
-            onDelete={onDeleteWidget}
-          />
-        ))}
-      </div>
+      {/* Wide Charts Section (Bar, Line, etc.) */}
+      {wideWidgets.length > 0 && (
+        <div className="space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="h-px bg-gray-200 flex-1"></div>
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 uppercase tracking-wider px-2 sm:px-3">
+              Charts
+            </h3>
+            <div className="h-px bg-gray-200 flex-1"></div>
+          </div>
+          
+          {/* Responsive grid: 1 col mobile, 2 cols tablet+ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            {wideWidgets.map((widget) => (
+              <WidgetCard
+                key={widget.id}
+                widget={widget}
+                onEdit={onEditWidget}
+                onDelete={onDeleteWidget}
+                layoutType="wide"
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
-      <div className="text-center text-sm text-gray-500 pt-4">
-        Hover over any widget to edit or delete it
+      {/* Arc/Pie Charts Section */}
+      {arcWidgets.length > 0 && (
+        <div className="space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="h-px bg-gray-200 flex-1"></div>
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 uppercase tracking-wider px-2 sm:px-3">
+              Distributions
+            </h3>
+            <div className="h-px bg-gray-200 flex-1"></div>
+          </div>
+          
+          {/* Responsive grid: 1 col mobile, 2 cols tablet, 3 cols desktop */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {arcWidgets.map((widget) => (
+              <WidgetCard
+                key={widget.id}
+                widget={widget}
+                onEdit={onEditWidget}
+                onDelete={onDeleteWidget}
+                layoutType="compact"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Compact Widgets Section */}
+      {compactWidgets.length > 0 && (
+        <div className="space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="h-px bg-gray-200 flex-1"></div>
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 uppercase tracking-wider px-2 sm:px-3">
+              Metrics
+            </h3>
+            <div className="h-px bg-gray-200 flex-1"></div>
+          </div>
+          
+          {/* Responsive grid: 1 col mobile, 2 cols tablet, 3 cols desktop */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {compactWidgets.map((widget) => (
+              <WidgetCard
+                key={widget.id}
+                widget={widget}
+                onEdit={onEditWidget}
+                onDelete={onDeleteWidget}
+                layoutType="compact"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Footer Hint */}
+      <div className="text-center text-xs sm:text-sm text-gray-400 pt-4 sm:pt-6 border-t border-gray-200">
+        💡 Hover over any widget to edit or delete it
       </div>
     </div>
   );

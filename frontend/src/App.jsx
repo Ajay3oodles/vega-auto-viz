@@ -202,33 +202,37 @@ function App() {
             <PromptInput onSubmit={handleSubmit} isLoading={isLoading} />
           </section>
 
-          {selectedWidgetId ? (
-            <section>
-              {isLoadingWidget ? (
-                <div className="card py-12 text-center">Loading widget...</div>
-              ) : isLoading ? (
-                <LoadingState />
-              ) : error ? (
-                <ErrorDisplay error={error} onRetry={handleRetry} />
-              ) : chartData ? (
-                <ChartDisplay
-                  chartData={chartData}
-                  onCopy={(msg) => showToast(msg, 'success')}
-                  onDownload={(msg) => showToast(msg, 'success')}
-                />
-              ) : null}
-            </section>
-          ) : (
-            <section>
-              <WidgetDashboard
-                widgets={widgets}
-                isLoading={isLoadingWidgets}
-                onEditWidget={handleEditWidget}
-                onDeleteWidget={handleDeleteWidget}
-                onCreateNew={handleCreateNew}
-              />
-            </section>
-          )}
+{selectedWidgetId ? (
+  <section>
+    {isLoadingWidget ? (
+      <div className="card py-12 text-center">Loading widget...</div>
+    ) : isLoading ? (
+      <LoadingState />
+    ) : error ? (
+      <ErrorDisplay error={error} onRetry={handleRetry} />
+    ) : chartData ? (
+      <ChartDisplay
+        chartData={chartData}
+        onCopy={(msg) => showToast(msg, 'success')}
+        onDownload={(msg) => showToast(msg, 'success')}
+      />
+    ) : null}
+  </section>
+) : (
+  <section>
+    {isLoading ? (
+      <LoadingState />
+    ) : (
+      <WidgetDashboard
+        widgets={widgets}
+        isLoading={isLoadingWidgets}
+        onEditWidget={handleEditWidget}
+        onDeleteWidget={handleDeleteWidget}
+        onCreateNew={handleCreateNew}
+      />
+    )}
+  </section>
+)}
 
           <section>
             <ExamplePrompts onSelectPrompt={handleExampleClick} isLoading={isLoading} />

@@ -3,7 +3,7 @@
 
 import { saveWidget, getLastWidget } from '../services/widgetService.js';
 import { beautifyVegaSpec, snakeToTitle } from '../utils/labelFormatter.js';
-import { getCachedSchema } from '../utils/databaseSchema.js';
+import { getCachedSchema } from '../utils/databaseSchemaExternalApi.js';
 import { generateChartWithAI } from '../services/aiService.js';
 import { executeQuery, validateQuery } from '../services/databaseService.js';
 import {

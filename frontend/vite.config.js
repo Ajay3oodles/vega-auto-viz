@@ -15,7 +15,7 @@ export default defineConfig({
       // Proxy API requests to backend
       // When you call '/api/...' from frontend, it will forward to backend
       '/api': {
-        target: 'http://localhost:5000',  // Your backend server
+        target: 'http://localhost:3000',  // Your backend server
         changeOrigin: true,               // Needed for virtual hosted sites
         secure: false                     // If backend uses HTTPS
       }
